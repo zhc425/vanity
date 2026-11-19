@@ -240,3 +240,37 @@ button:disabled { cursor: wait; opacity: .58; }
 @media (max-width: 420px) {
   .system-region { width: auto; align-items: flex-start; flex-wrap: wrap; }
 }
+
+/* 备注、删除、备份 */
+.editor textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 7px;
+  background: var(--black);
+  color: inherit;
+  font: 15px/1.5 var(--reading, var(--serif));
+  resize: vertical;
+  min-height: 74px;
+}
+.editor textarea:focus { outline: 2px solid var(--edition-plum); outline-offset: 1px; }
+.editor textarea::placeholder { color: var(--silver); font-size: 13px; }
+.action--danger { margin-right: auto; color: var(--expired); background: transparent; border-color: transparent; }
+.action--danger:hover { background: var(--hover); }
+.category-index__backup { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--graphite); }
+.category-index__backup button, .category-index__backup label {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid var(--edition-rule);
+  border-radius: 8px;
+  background: var(--edition-veil);
+  color: var(--edition-ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.category-index__backup button:disabled { opacity: .5; cursor: default; }

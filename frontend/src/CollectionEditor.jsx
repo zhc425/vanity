@@ -3,7 +3,7 @@ import { todayInShanghai } from './collection.js';
 
 const errorFor = '不能晚于今天';
 
-export default function CollectionEditor({ category, mode, record, onClose, onSave }) {
+export default function CollectionEditor({ category, mode, record, onClose, onSave, onDelete }) {
   const dialog = useRef(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -40,12 +40,16 @@ export default function CollectionEditor({ category, mode, record, onClose, onSa
     let changes;
     if (opening) {
       const openedDate = read('openedDate');
+      if (!openedDate) return setError('请选择开封日期。');
       if (openedDate > today) return setError('开封日期' + errorFor);
+      if (record.purchasedDate && openedDate < record.purchasedDate) return setError('开封日期早于购买日期，请检查。');
       changes = { openedDate, paoMonths: read('paoMonths') ? Number(read('paoMonths')) : null };
     } else {
       const name = read('name');
       const price = read('price');
+      const priceValue = Number(price);
       if (!name) return setError('请填写藏品名称。');
+      if (price !== '' && (!Number.isFinite(priceValue) || priceValue < 0 || priceValue > 9999999.99)) return setError('价格格式不正确。');
       if (purchasedDate > today) return setError('购买日期' + errorFor);
       changes = {
         name,
@@ -53,6 +57,7 @@ export default function CollectionEditor({ category, mode, record, onClose, onSa
         shade: read('shade') || null,
         purchasedDate: purchasedDate || null,
         packageExpiryDate: read('packageExpiryDate') || null,
+        note: read('note') || null,
         price: price === '' ? null : { minorUnits: Math.round(Number(price) * 100), currency: 'CNY' }
       };
     }
@@ -106,10 +111,20 @@ export default function CollectionEditor({ category, mode, record, onClose, onSa
             <label>包装到期日<input name="packageExpiryDate" type="date" defaultValue={record?.packageExpiryDate ?? ''} /></label>
             </div>
             </details>
+            <label>备注 <span>选填</span><textarea name="note" rows="3" maxLength="2000" defaultValue={record?.note ?? ''} placeholder="肤感、搭配、回购意向……" /></label>
           </>
         )}
         {error && <p className="editor__error" role="alert">{error}</p>}
         <footer className="editor__actions">
+          {mode === 'edit' && onDelete && (
+            <button className="action action--danger" type="button" disabled={saving} onClick={async () => {
+              if (!window.confirm(`删除「${record.name}」？使用记录会一起删除。`)) return;
+              setSaving(true);
+              try { await onDelete(); close(); }
+              catch (error) { setError(error.message || '未能删除，请重试。'); }
+              finally { setSaving(false); }
+            }}>删除藏品</button>
+          )}
           <button className="action action--quiet" type="button" onClick={close}>取消</button>
           <button className="action action--primary" type="submit" disabled={saving}>{saving ? '保存中…' : opening ? '保存开封记录' : '保存藏品'}</button>
         </footer>

@@ -4,70 +4,8 @@ import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, 
 
 import './CircularCarousel.css';
 
-const photo = n => `/images/${n}.jpg`;
-
-export const DEFAULT_ITEMS = [
-  {
-    src: photo(1),
-    alt: 'Mist drifting through a mountain valley',
-    title: 'Valley',
-    subtitle: 'Landscape'
-  },
-  {
-    src: photo(2),
-    alt: 'A woman with long hair in soft studio light',
-    title: 'Portrait',
-    subtitle: 'Studio'
-  },
-  {
-    src: photo(3),
-    alt: 'Glass towers seen from street level',
-    title: 'Towers',
-    subtitle: 'Architecture'
-  },
-  {
-    src: photo(4),
-    alt: 'A surfer carving inside a breaking wave',
-    title: 'Swell',
-    subtitle: 'Ocean'
-  },
-  {
-    src: photo(5),
-    alt: 'An angular white building against the sky',
-    title: 'Facade',
-    subtitle: 'Architecture'
-  },
-  {
-    src: photo(6),
-    alt: 'A model in striped trousers leaning on a wall',
-    title: 'Pose',
-    subtitle: 'Editorial'
-  },
-  {
-    src: photo(7),
-    alt: 'The Milky Way above snowy peaks',
-    title: 'Night',
-    subtitle: 'Sky'
-  },
-  {
-    src: photo(8),
-    alt: 'A woman in a long coat on a city street',
-    title: 'Street',
-    subtitle: 'Editorial'
-  },
-  {
-    src: photo(9),
-    alt: 'Mountains mirrored in a still lake',
-    title: 'Mirror',
-    subtitle: 'Landscape'
-  },
-  {
-    src: photo(10),
-    alt: 'A glass skyscraper under a cloudy sky',
-    title: 'Glass',
-    subtitle: 'Architecture'
-  }
-];
+// 组件需要通过 items 传入卡片数据；不再内置示例图片
+export const DEFAULT_ITEMS = [];
 
 const PRESETS = {
   cylinder: {

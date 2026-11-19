@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { displayDate, displayPrice, getExpiry, countUses, todayInShanghai } from './collection.js';
-import { loadCollection, saveCollection, readLegacyRecords, mergeCollections, watchExternalChanges } from './collectionStore.js';
+import { loadCollection, saveCollection, readLegacyRecords, mergeCollections, normalizeRecords, watchExternalChanges } from './collectionStore.js';
 import CollectionEditor from './CollectionEditor.jsx';
 import givenchyDetail from './preview-images/GivenchyDetail.webp';
 import CircularCarousel from './components/CircularCarousel/CircularCarousel.jsx';
@@ -465,17 +465,55 @@ export default function App() {
     const next = records.map(item => item.id === id ? { ...item, uses: [...(item.uses ?? []), use] } : item);
     try {
       const persisted = await saveRecords(next);
-      setNotice({ text: '已记下今天的一次使用' + (persisted ? '' : '，但未保存到本机'), undo: { id, useId: use.id } });
+      setNotice({ text: '已记下今天的一次使用' + (persisted ? '' : '，但未保存到本机'), undo: { type: 'use', id, useId: use.id } });
     } catch (error) { setNotice({ text: error.message || '未能保存使用记录，请重试。' }); }
   };
 
-  const undoUse = async () => {
-    const { id, useId } = notice.undo;
-    const next = records.map(item => item.id === id ? { ...item, uses: item.uses.filter(use => use.id !== useId) } : item);
+  const undoNotice = async () => {
+    const undo = notice?.undo;
+    if (!undo) return;
+    const next = undo.type === 'delete'
+      ? [undo.record, ...records.filter(item => item.id !== undo.record.id)]
+      : records.map(item => item.id === undo.id ? { ...item, uses: (item.uses ?? []).filter(use => use.id !== undo.useId) } : item);
+    const label = undo.type === 'delete' ? `已恢复「${undo.record.name}」` : '已撤销这次使用';
     try {
       const persisted = await saveRecords(next);
-      setNotice({ text: persisted ? '已撤销这次使用' : '已撤销这次使用，但未保存到本机' });
+      setNotice({ text: persisted ? label : label + '，但未保存到本机' });
     } catch (error) { setNotice({ text: error.message || '未能撤销，请重试。' }); }
+  };
+
+  const deleteRecord = async () => {
+    const target = records.find(item => item.id === editor.id);
+    if (!target) return;
+    const persisted = await saveRecords(records.filter(item => item.id !== target.id));
+    setNotice({ text: `已删除「${target.name}」` + (persisted ? '' : '，但未保存到本机'), undo: { type: 'delete', record: target } });
+    if (page === 'item') backTo('category');
+  };
+
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify({ version: 2, records }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = Object.assign(document.createElement('a'), { href: url, download: `vanity-backup-${todayInShanghai()}.json` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const importBackup = async file => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const list = Array.isArray(parsed) ? parsed : parsed?.records;
+      const { records: incoming, skipped } = normalizeRecords(list);
+      const fresh = incoming.filter(item => !records.some(old => old.id === item.id));
+      if (!fresh.length) { setNotice({ text: incoming.length ? '这些藏品都已存在' : '文件里没有可导入的藏品' }); return; }
+      const persisted = await saveRecords(mergeCollections(records, fresh));
+      setNotice({ text: `已导入 ${fresh.length} 件藏品` + (skipped ? `，跳过 ${skipped} 条无效记录` : '') + (persisted ? '' : '，但未保存到本机') });
+      indexDialog.current?.close();
+    } catch {
+      setNotice({ text: '无法读取这个文件，请选择 Vanity 导出的 JSON' });
+    }
   };
 
   const importable = legacy.filter(old => !records.some(item => item.id === old.id));
@@ -490,8 +528,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!notice || notice.undo) return undefined;
-    const timeout = window.setTimeout(() => setNotice(null), 4000);
+    if (!notice) return undefined;
+    const timeout = window.setTimeout(() => setNotice(null), notice.undo ? 8000 : 4000);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -567,9 +605,13 @@ export default function App() {
               </li>
             ))}
           </ul>
+          <footer className="category-index__backup">
+            <button type="button" onClick={exportBackup} disabled={!records.length}>导出备份</button>
+            <label>导入备份<input type="file" accept="application/json,.json" hidden onChange={event => { importBackup(event.target.files?.[0]); event.target.value = ''; }} /></label>
+          </footer>
         </div>
       </dialog>
-      {editor && <CollectionEditor category={editor.category} mode={editor.mode} record={records.find(item => item.id === editor.id)} onClose={() => setEditor(null)} onSave={saveEditor} />}
+      {editor && <CollectionEditor category={editor.category} mode={editor.mode} record={records.find(item => item.id === editor.id)} onClose={() => setEditor(null)} onSave={saveEditor} onDelete={deleteRecord} />}
       {storage === 'memory' ? (
         <div className="system-region" role="alert"><span>当前浏览器禁止保存数据，关闭页面后藏品会丢失</span></div>
       ) : externalChange ? (
@@ -586,7 +628,7 @@ export default function App() {
       ) : null}
       <div className="notice-region">
         <div role="status">{notice?.text}</div>
-        {notice?.undo && <><button type="button" onClick={undoUse}>撤销</button><button type="button" aria-label="关闭提示" onClick={() => setNotice(null)}>×</button></>}
+        {notice?.undo && <><button type="button" onClick={undoNotice}>撤销</button><button type="button" aria-label="关闭提示" onClick={() => setNotice(null)}>×</button></>}
       </div>
     </>
   );
