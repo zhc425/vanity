@@ -212,6 +212,8 @@ struct RecordView: View {
                 Text(record.lastUsed.map { "上次 \(Day.display($0))" } ?? "还没有使用记录")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             Spacer()
             Button {
