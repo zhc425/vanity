@@ -13,9 +13,18 @@
 
 ## 预览
 
-| 封面 | 分类 | 详情 |
+界面遵循 Apple Human Interface Guidelines：系统字体、分组列表、SF Symbols 与系统材质，只保留一种玫瑰木色作为品牌色，让藏品照片成为主角。
+
+**iOS**
+
+| 藏品 | 详情 | 到期 |
 |---|---|---|
-| ![](docs/previews/cover-mobile-day.png) | ![](docs/previews/collection-mobile-day.png) | ![](docs/previews/detail-mobile-day.png) |
+| ![](docs/previews/ios-light-library.jpg) | ![](docs/previews/ios-light-record.jpg) | ![](docs/previews/ios-light-expiring.jpg) |
+| ![](docs/previews/ios-dark-library.jpg) | ![](docs/previews/ios-dark-record.jpg) | ![](docs/previews/ios-dark-settings.jpg) |
+
+**网页**
+
+![](docs/previews/web-library-light-wide.jpg)
 
 ## 网页版
 

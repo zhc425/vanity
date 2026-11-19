@@ -10,6 +10,7 @@ struct VanityApp: App {
             RootView()
                 .environment(store)
                 .preferredColorScheme(appearance.colorScheme)
+                .tint(Palette.accent)
         }
     }
 }

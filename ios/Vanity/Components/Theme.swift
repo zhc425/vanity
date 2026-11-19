@@ -3,7 +3,7 @@ import SwiftUI
 /// 设计基调：遵循 Human Interface Guidelines，使用系统字体、系统语义色和材质，
 /// 只保留一种品牌色（玫瑰木 AccentColor），让藏品照片成为界面上唯一的主角。
 enum Palette {
-    static let accent = Color.accentColor
+    static let accent = Color("AccentColor")
     static let warning = Color.orange
     static let expired = Color.red
     static let fresh = Color.green

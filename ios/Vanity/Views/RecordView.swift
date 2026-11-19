@@ -220,7 +220,9 @@ struct RecordView: View {
             } label: {
                 Label("使用一次", systemImage: "plus")
                     .font(.body.weight(.semibold))
-                    .padding(.horizontal, 6)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 4)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)

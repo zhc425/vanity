@@ -1,11 +1,4 @@
 
-export const collectionPreview = [
-  { id: 'sample-a', demo: true, categoryId: 'loose-powder', brand: '示例品牌 A', name: '柔焦定妆散粉', shade: '透明色', color: 'lavender', purchasedDate: '2026-04-18', openedDate: '2026-04-18', paoMonths: 12, usageCount: 18, price: { minorUnits: 28900, currency: 'CNY' } },
-  { id: 'sample-b', demo: true, categoryId: 'loose-powder', brand: '示例品牌 B', name: '轻透矿物散粉', shade: '自然色', color: 'sand', purchasedDate: '2025-12-02', packageExpiryDate: '2026-12-02', usageCount: 6, price: { minorUnits: 15900, currency: 'CNY' } },
-  { id: 'sample-c', demo: true, categoryId: 'loose-powder', brand: '示例品牌 C', name: '柔雾蜜粉', color: 'rose', usageCount: 0 }
-];
-
-
 const shanghaiDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' });
 const dateFormat = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeZone: 'UTC' });
 export const todayInShanghai = () => shanghaiDate.format(new Date());

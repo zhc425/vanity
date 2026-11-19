@@ -1,21 +1,24 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="auto">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f5f8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F2F2F7" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="description" content="Vanity：记录美妆藏品的使用次数、开封日期与到期时间。数据只保存在本机。" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Vanity" />
     <link rel="icon" type="image/png" href="./icon.png" />
     <link rel="apple-touch-icon" href="./icon.png" />
     <script>
       try {
-        if (localStorage.getItem('vanity.theme') === 'dark') {
-          document.documentElement.dataset.theme = 'dark';
-          document.querySelector('meta[name="theme-color"]').content = '#141318';
-        }
-      } catch {}
+        var theme = localStorage.getItem('vanity.theme');
+        if (theme !== 'light' && theme !== 'dark') theme = 'auto';
+        document.documentElement.dataset.theme = theme;
+        var dark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.querySelector('meta[name="theme-color"]').content = '#000000';
+      } catch (error) {}
     </script>
     <title>Vanity · 我的美妆藏品</title>
   </head>
@@ -24,4 +27,3 @@
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-

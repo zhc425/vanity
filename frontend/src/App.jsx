@@ -1,304 +1,73 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
-import { displayDate, displayPrice, getExpiry, countUses, todayInShanghai } from './collection.js';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { todayInShanghai } from './collection.js';
 import { loadCollection, saveCollection, readLegacyRecords, mergeCollections, normalizeRecords, watchExternalChanges } from './collectionStore.js';
-import CollectionEditor from './CollectionEditor.jsx';
-import givenchyDetail from './preview-images/GivenchyDetail.webp';
-import CircularCarousel from './components/CircularCarousel/CircularCarousel.jsx';
-import fanBeautyMask from './preview-images/FanBeautyMask.webp';
-import chanelCleanser from './preview-images/ChanelCleanser.webp';
-import skinCeuticalsCream from './preview-images/SkinCeuticalsCream.webp';
-import cleDePeauPrimer from './preview-images/CleDePeauPrimer.webp';
-import yslFoundation from './preview-images/YSLFoundation.webp';
-import givenchyLoosePowder from './preview-images/GivenchyLoosePowder.webp';
-import narsPressedPowder from './preview-images/NARSPressedPowder.webp';
-import chanelBlush from './preview-images/ChanelBlush.webp';
-import maoGepingPalette from './preview-images/MaoGepingPalette.webp';
-import chanelLipstick from './preview-images/ChanelLipstick.webp';
-import momoWorkshopPuff from './preview-images/MomoWorkshopPuff.webp';
+import { categoryById } from './categories.js';
+import { expiringSoon } from './format.js';
+import { IconCheck, IconClock, IconGear, IconGrid } from './ui/Icons.jsx';
+import LibraryView from './views/LibraryView.jsx';
+import CategoryView from './views/CategoryView.jsx';
+import RecordView from './views/RecordView.jsx';
+import ExpiringView from './views/ExpiringView.jsx';
+import SettingsView from './views/SettingsView.jsx';
+import EditorSheet from './views/EditorSheet.jsx';
 
-const items = [
-  {
-    id: 'mask',
-    entry: true,
-    src: fanBeautyMask,
-    alt: 'Fan Beauty Diary mask collection',
-    title: '面膜',
-    subtitle: 'Mask'
-  },
-  {
-    id: 'cleanser',
-    entry: true,
-    src: chanelCleanser,
-    alt: 'Chanel La Mousse cleansing cream-to-foam',
-    title: '洁面乳',
-    subtitle: 'Cleanser'
-  },
-  {
-    id: 'cream',
-    entry: true,
-    src: skinCeuticalsCream,
-    alt: 'SkinCeuticals A.G.E. Interrupter Ultra cream',
-    title: '面霜',
-    subtitle: 'Cream'
-  },
-  {
-    id: 'primer',
-    entry: true,
-    src: cleDePeauPrimer,
-    alt: 'Clé de Peau correcting cream veil',
-    title: '隔离',
-    subtitle: 'Primer'
-  },
-  {
-    id: 'foundation',
-    entry: true,
-    src: yslFoundation,
-    alt: 'YSL All Hours foundation bottle on a tray',
-    title: '粉底液',
-    subtitle: 'Foundation'
-  },
-  {
-    id: 'loose-powder',
-    entry: true,
-    src: givenchyLoosePowder,
-    alt: 'Givenchy Prisme Libre loose powder',
-    title: '散粉',
-    subtitle: 'Loose Powder',
-    cover: givenchyDetail
-  },
-  {
-    id: 'pressed-powder',
-    entry: true,
-    src: narsPressedPowder,
-    alt: 'NARS pressed powder compact',
-    title: '蜜粉饼',
-    subtitle: 'Pressed Powder'
-  },
-  {
-    id: 'blush',
-    entry: true,
-    src: chanelBlush,
-    alt: 'Chanel powder blush compact with brush',
-    title: '腮红',
-    subtitle: 'Blush'
-  },
-  {
-    id: 'eyeshadow',
-    entry: true,
-    src: maoGepingPalette,
-    alt: 'Mao Geping eyeshadow palette',
-    title: '眼影盘',
-    subtitle: 'Palette'
-  },
-  {
-    id: 'lipstick',
-    entry: true,
-    src: chanelLipstick,
-    alt: 'Chanel lipstick in a gold case',
-    title: '口红',
-    subtitle: 'Lipstick'
-  },
-  {
-    id: 'puff',
-    entry: true,
-    src: momoWorkshopPuff,
-    alt: "Momo's Workshop makeup puffs in a basket",
-    title: '粉扑',
-    subtitle: 'Puff'
-  }
+const THEME_KEY = 'vanity.theme';
+const THEME_COLORS = { light: '#F2F2F7', dark: '#000000' };
+
+/**
+ * 路由（hash）：
+ *   ''                  藏品首页
+ *   #<分类>             分类页
+ *   #<分类>/<藏品 id>    藏品详情
+ *   #expiring[/<id>]    到期页 / 从到期页打开的详情
+ *   #settings           设置
+ */
+function parseRoute(hash) {
+  const [first = '', rawId] = hash.replace(/^#/, '').split('/');
+  const recordId = rawId ? decodeURIComponent(rawId) : null;
+  if (first === 'expiring') return { tab: 'expiring', recordId };
+  if (first === 'settings') return { tab: 'settings', recordId: null };
+  if (categoryById(first)) return { tab: 'library', categoryId: first, recordId };
+  return { tab: 'library', recordId: null };
+}
+
+const recordHash = (record, tab) => (tab === 'expiring' ? '#expiring/' : `#${record.categoryId}/`) + encodeURIComponent(record.id);
+
+function routeLabel(hash) {
+  const route = parseRoute(hash ?? '');
+  if (route.tab === 'expiring') return '到期';
+  if (route.tab === 'settings') return '设置';
+  if (route.categoryId && !route.recordId) return categoryById(route.categoryId).title;
+  return '藏品';
+}
+
+function parentHash(hash) {
+  const route = parseRoute(hash);
+  if (route.tab === 'expiring') return '#expiring';
+  if (route.categoryId && route.recordId) return '#' + route.categoryId;
+  return '';
+}
+
+const tabs = [
+  { id: 'library', hash: '', label: '藏品', Icon: IconGrid },
+  { id: 'expiring', hash: '#expiring', label: '到期', Icon: IconClock },
+  { id: 'settings', hash: '#settings', label: '设置', Icon: IconGear }
 ];
 
-
-const categoryHash = category => '#' + category.id;
-const recordHash = (category, id) => categoryHash(category) + '/' + encodeURIComponent(id);
-const getCategory = hash => items.find(item => categoryHash(item) === hash.split('/')[0]);
-const initialCard = items.findIndex(item => item.id === 'loose-powder');
-const portraitName = id => 'portrait-' + id;
-
-
-function VanityMark({ compact = false }) {
-  const Heading = compact ? 'span' : 'h1';
-  return (
-    <Heading className={compact ? 'detail__mark' : 'brand__title'}>
-      <span className="brand__initial">V</span>anit<span className="brand__tail">y</span>
-    </Heading>
-  );
-}
-
-function Chevron({ left = false }) {
-  return <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-    <path d={left ? 'm14 6-6 6 6 6' : 'm10 6 6 6-6 6'} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>;
-}
-
-
-function RouteLink({ href, onNavigate, children, ...props }) {
-  return (
-    <a {...props} href={href} onClick={event => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-      event.preventDefault();
-      onNavigate(event);
-    }}>{children}</a>
-  );
-}
-
-function ThemeToggle({ dark, onToggle }) {
-  return (
-    <button type="button" className="theme-toggle" aria-label={dark ? '切换到白天模式' : '切换到夜间模式'} onClick={onToggle}>
-      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {dark ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></> : <path d="M20.8 14a8.9 8.9 0 0 1-10.8-10.8A9 9 0 1 0 20.8 14Z" />}
-      </svg>
-    </button>
-  );
-}
-
-function InnerHeader({ category, parent, onReturn, onIndex, themeControl }) {
-  return (
-    <header className="detail__bar">
-      <RouteLink className="detail__back" href={parent === 'category' ? categoryHash(category) : '#'} onNavigate={onReturn}>
-        <Chevron left />{parent === 'category' ? '返回' + category.title : '返回封面'}
-      </RouteLink>
-      <VanityMark compact />
-      <div className="header-tools"><button className="quiet-button" onClick={onIndex}>全部分类</button>{themeControl}</div>
-    </header>
-  );
-}
-
-function Status({ status }) {
-  return status && <span className="expiry" data-tone={status.tone}><span aria-hidden="true" />{status.label}</span>;
-}
-
-function SampleArt({ record }) {
-  if (!record.imageUrl && !record.demo) {
-    return <div className="collection-placeholder" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m3 16 5-5 5 5 3-3 5 5" /><circle cx="16" cy="9" r="1" /></svg></div>;
+function readTheme() {
+  try {
+    const value = localStorage.getItem(THEME_KEY);
+    return value === 'light' || value === 'dark' ? value : 'auto';
+  } catch {
+    return 'auto';
   }
-  return record.imageUrl
-    ? <img className="sample-image" src={record.imageUrl} alt={record.imageAlt ?? record.name} />
-    : <div className="sample-art" data-color={record.color} aria-hidden="true"><div className="sample-art__jar"><span /></div></div>;
 }
 
-function CategoryPage({ category, records, onReturn, onIndex, onRecord, onAdd, onUse, fromFrame, restoreId, themeControl }) {
-  const headline = useRef(null);
-  const photo = useRef(null);
-  const restored = useRef(null);
-
-  useLayoutEffect(() => {
-    (restoreId && restored.current ? restored.current : headline.current).focus({ preventScroll: true });
-    if (!fromFrame || fromFrame.width < 30 || fromFrame.height < 30 ||
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const img = photo.current;
-    const end = img.getBoundingClientRect();
-    if (!end.width || !end.height) return;
-    const animation = img.animate([
-      {
-        transform: `translate(${fromFrame.left - end.left}px, ${fromFrame.top - end.top}px) scale(${fromFrame.width / end.width}, ${fromFrame.height / end.height})`,
-        opacity: 0.54
-      },
-      { transform: 'none', opacity: 1 }
-    ], { duration: 420, easing: 'cubic-bezier(.22,.75,.24,1)' });
-    return () => animation.cancel();
-  }, [fromFrame, restoreId]);
-
-  return (
-    <div className="detail">
-      <InnerHeader category={category} parent="cover" onReturn={onReturn} onIndex={onIndex} themeControl={themeControl} />
-      <main className="collection" aria-labelledby="category-heading">
-        <section className="collection__intro">
-          <div className="collection__intro-copy">
-            <h1 id="category-heading" ref={headline} tabIndex={-1}>{category.title}</h1>
-            <p className="collection__subtitle"><span lang="en">{category.subtitle}</span><span>{records.length} 件</span></p>
-            <button className="action action--primary collection__add" type="button" onClick={onAdd}>＋ 添加藏品</button>
-          </div>
-          <figure className="collection__cover">
-            <img ref={photo} src={category.cover ?? category.src} alt={category.alt} />
-          </figure>
-        </section>
-        <section className="collection__records" aria-labelledby="record-list-title">
-          <div className="collection__head">
-            <h2 id="record-list-title">藏品</h2>
-            {records.length > 0 && <><span aria-hidden="true">使用</span><span aria-hidden="true">到期</span></>}
-          </div>
-          {records.length ? (
-            <ul className="collection__list">
-              {records.map(record => {
-                const expiry = getExpiry(record);
-                const identity = [record.brand, record.shade, record.demo ? '演示藏品' : null].filter(Boolean).join(' / ');
-                return (
-                  <li key={record.id}>
-                    <RouteLink className="collection__row" ref={record.id === restoreId ? restored : undefined} href={recordHash(category, record.id)} onNavigate={() => onRecord(record.id)}>
-                      <div className="collection__thumb" style={{ viewTransitionName: portraitName(record.id) }}><SampleArt record={record} /></div>
-                      <div className="collection__identity">
-                        <strong>{record.name}</strong>
-                        {identity && <span>{identity}</span>}
-                      </div>
-                      <div className="collection__use"><span className="collection__metric-label">使用</span><strong><span className="numeric">{countUses(record)}</span> 次</strong></div>
-                      <div className="collection__expiry">
-                        <div><span className="collection__metric-label">到期</span><strong>{displayDate(expiry.date)}</strong></div>
-                        <Status status={expiry.status} />
-                      </div>
-                    </RouteLink>
-                    <button className="action collection__use-button" type="button" aria-label={`记一次使用：${record.name}`} onClick={() => onUse(record.id)}><span aria-hidden="true">＋</span> 记一次使用</button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : <p className="collection__empty">还没有藏品</p>}
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function RecordPage({ category, record, onReturn, onIndex, onUse, onEdit, onOpening, themeControl }) {
-  const headline = useRef(null);
-  const expiry = getExpiry(record);
-  const identity = [record.brand, record.shade, record.demo ? '演示藏品' : null].filter(Boolean).join(' / ');
-
-  useLayoutEffect(() => {
-    headline.current.focus({ preventScroll: true });
-  }, []);
-
-  return (
-    <div className="detail">
-      <InnerHeader category={category} parent="category" onReturn={onReturn} onIndex={onIndex} themeControl={themeControl} />
-      <main className="detail__layout record" aria-labelledby="record-title">
-        <header className="record__heading">
-            <h1 id="record-title" ref={headline} tabIndex={-1}>{record.name}</h1>
-            {identity && <p className="record__variant">{identity}</p>}
-        </header>
-        <figure className="detail__figure record__figure">
-          <div className="record__portrait" style={{ viewTransitionName: portraitName(record.id) }}><SampleArt record={record} /></div>
-          {!record.imageUrl && !record.demo && <figcaption>暂无照片</figcaption>}
-        </figure>
-        <div className="detail__information record__archive">
-          <section className="record__section record__usage" aria-labelledby="use-title">
-            <div className="record__use-row">
-              <div><h2 id="use-title">使用记录</h2><p className="record__value"><span className="numeric">{countUses(record)}</span> <span className="record__unit">次</span></p></div>
-              <button className="action action--primary" type="button" onClick={() => onUse(record.id)}>＋ 记一次使用</button>
-            </div>
-          </section>
-          <section className="record__section" aria-labelledby="expiry-title">
-            <div className="record__section-top">
-              <h2 id="expiry-title">到期日</h2>
-              <button className="record__edit" type="button" onClick={() => onOpening(record.id)}>{record.openedDate ? '修改开封记录' : '记录开封'}</button>
-            </div>
-            <div className="record__date"><p className="record__value">{displayDate(expiry.date)}</p><Status status={expiry.status} /></div>
-            {(expiry.basis || expiry.prompt) && <p className="record__meta">{[expiry.basis, expiry.prompt].filter(Boolean).join('。')}</p>}
-            {record.openedDate && <p className="record__meta">开封于 {displayDate(record.openedDate)}{record.paoMonths ? `，开封后可用 ${record.paoMonths} 个月` : ''}</p>}
-          </section>
-          <section className="record__section record__purchase" aria-labelledby="purchase-title">
-            <div className="record__section-top">
-              <h2 id="purchase-title">购入信息</h2>
-              <button className="record__edit" type="button" onClick={() => onEdit(record.id)}>编辑藏品</button>
-            </div>
-            <dl><div><dt>购买日期</dt><dd>{displayDate(record.purchasedDate)}</dd></div><div><dt>实付价格</dt><dd>{displayPrice(record.price)}</dd></div></dl>
-          </section>
-          {record.note && <p className="detail__description">{record.note}</p>}
-        </div>
-      </main>
-    </div>
-  );
+function applyTheme(theme) {
+  const root = document.documentElement;
+  root.dataset.theme = theme;
+  const dark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? THEME_COLORS.dark : THEME_COLORS.light);
 }
 
 export default function App() {
@@ -310,116 +79,103 @@ export default function App() {
   const [legacy] = useState(() => readLegacyRecords());
   const [importDismissed, setImportDismissed] = useState(false);
   const writing = useRef(false);
-  const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
-  const themeControl = <ThemeToggle dark={dark} onToggle={() => {
-    const theme = dark ? 'light' : 'dark';
-    document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]').content = dark ? '#f7f5f8' : '#141318';
-    try { localStorage.setItem('vanity.theme', theme); } catch {}
-    setDark(!dark);
-  }} />;
+
+  const [theme, setTheme] = useState(readTheme);
   const [hash, setHash] = useState(() => window.location.hash);
-  const renderedHash = useRef(hash);
-  const viewTransition = useRef(null);
+  const [direction, setDirection] = useState(null);
+  const scrollPositions = useRef(new Map());
   const [editor, setEditor] = useState(null);
   const [notice, setNotice] = useState(null);
-  const category = getCategory(hash);
-  const record = category && records.find(item => item.categoryId === category.id && recordHash(category, item.id) === hash);
-  const page = record ? 'item' : category ? 'category' : 'cover';
-  const coverIndex = useRef(category ? items.indexOf(category) : initialCard);
-  const [active, setActive] = useState(coverIndex.current);
-  const carousel = useRef(null);
-  const indexDialog = useRef(null);
-  const coverEntered = useRef(false);
-  const coverAction = useRef(null);
-  const fromFrame = useRef(null);
-  const lastRecord = useRef(null);
-  const categoryScroll = useRef(0);
-  const hasVisitedCategory = useRef(page !== 'cover');
-  const current = items[active];
+  const noticeKey = useRef(0);
 
-  const sync = () => {
-    const next = window.location.hash;
-    if (next === renderedHash.current) return;
-    const previous = renderedHash.current;
-    renderedHash.current = next;
-    const nextCategory = getCategory(next);
-    if (nextCategory) coverIndex.current = items.indexOf(nextCategory);
-    else setActive(coverIndex.current);
-    const update = () => setHash(next);
-    const intoRecord = next.includes('/') || previous.includes('/');
-    if (intoRecord && nextCategory && getCategory(previous) &&
-        document.startViewTransition && !document.querySelector('dialog[open]') &&
-        !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      viewTransition.current?.skipTransition();
-      const transition = document.startViewTransition(() => {
-        if (renderedHash.current === next) flushSync(update);
-      });
-      viewTransition.current = transition;
-      transition.finished.catch(() => {}).finally(() => {
-        if (viewTransition.current === transition) viewTransition.current = null;
-      });
-    } else {
-      viewTransition.current?.skipTransition();
-      update();
-    }
+  // ---------- 主题 ----------
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== 'auto') return undefined;
+    const query = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => applyTheme('auto');
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [theme]);
+
+  const chooseTheme = value => {
+    setTheme(value);
+    try {
+      if (value === 'auto') localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, value);
+    } catch { /* 无法保存主题偏好时只在本次生效 */ }
   };
 
-  useEffect(() => {
-    const onPop = () => {
-      fromFrame.current = null;
-      sync();
-    };
-    window.addEventListener('popstate', onPop);
-    window.addEventListener('hashchange', onPop);
-    return () => {
-      window.removeEventListener('popstate', onPop);
-      window.removeEventListener('hashchange', onPop);
-    };
+  // ---------- 导航 ----------
+  const depth = () => history.state?.vanityDepth ?? 0;
+
+  const navigate = useCallback((target, { animate = true } = {}) => {
+    scrollPositions.current.set(window.location.hash, window.scrollY);
+    history.pushState({ vanity: true, from: window.location.hash, vanityDepth: depth() + 1 }, '', target || window.location.pathname + window.location.search);
+    setDirection(animate ? 'forward' : null);
+    setHash(window.location.hash);
   }, []);
 
-  const recordName = record?.name;
-  const categoryTitle = category?.title;
-  useLayoutEffect(() => {
-    document.title = page === 'item' ? `${recordName} · Vanity` : page === 'category' ? categoryTitle + ' · Vanity' : 'Vanity · 我的美妆藏品';
-    window.scrollTo(0, page === 'category' && lastRecord.current ? categoryScroll.current : 0);
-    if (page === 'cover' && hasVisitedCategory.current) coverAction.current?.focus({ preventScroll: true });
-  }, [page, recordName, categoryTitle, records]);
-
-  useEffect(() => { if (page === 'cover') coverEntered.current = true; }, [page]);
-
-  const openCategory = (target, frame = null) => {
-    indexDialog.current?.close();
-    if (target.id === category?.id && page === 'category') return;
-    hasVisitedCategory.current = true;
-    fromFrame.current = frame;
-    lastRecord.current = null;
-    categoryScroll.current = 0;
-    history.pushState({ vanityParent: page === 'cover' ? 'cover' : null }, '', categoryHash(target));
-    sync();
-  };
-
-  const openRecord = id => {
-    fromFrame.current = null;
-    lastRecord.current = id;
-    categoryScroll.current = window.scrollY;
-    history.pushState({ vanityParent: 'category' }, '', recordHash(category, id));
-    sync();
-  };
-
-  const backTo = parent => {
-    fromFrame.current = null;
-    if (history.state?.vanityParent === parent) {
+  const goBack = useCallback(() => {
+    if (history.state?.vanity) {
       history.back();
       return;
     }
-    const target = parent === 'category' ? categoryHash(category) : window.location.pathname + window.location.search;
-    history.replaceState(null, '', target);
-    sync();
+    const target = parentHash(window.location.hash);
+    history.replaceState(null, '', target || window.location.pathname + window.location.search);
+    setDirection('back');
+    setHash(window.location.hash);
+  }, []);
+
+  useEffect(() => {
+    let lastDepth = depth();
+    const onPop = () => {
+      const nextDepth = depth();
+      setDirection(nextDepth < lastDepth ? 'back' : nextDepth > lastDepth ? 'forward' : null);
+      lastDepth = nextDepth;
+      setHash(window.location.hash);
+    };
+    const onPush = () => { lastDepth = depth(); };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('hashchange', onPop);
+    window.addEventListener('vanity:navigated', onPush);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('hashchange', onPop);
+      window.removeEventListener('vanity:navigated', onPush);
+    };
+  }, []);
+  useEffect(() => { window.dispatchEvent(new Event('vanity:navigated')); }, [hash]);
+
+  const route = parseRoute(hash);
+  const record = route.recordId ? records.find(item => item.id === route.recordId) : null;
+  const category = route.categoryId ? categoryById(route.categoryId) : null;
+  const view = record ? 'record' : route.tab === 'library' && category ? 'category' : route.tab;
+  const backLabel = routeLabel(history.state?.from ?? parentHash(hash));
+
+  useLayoutEffect(() => {
+    document.title = view === 'record' ? `${record.name} · Vanity`
+      : view === 'category' ? `${category.title} · Vanity`
+      : view === 'expiring' ? '到期 · Vanity'
+      : view === 'settings' ? '设置 · Vanity'
+      : 'Vanity · 我的美妆藏品';
+    // 只在页面切换时调整滚动位置
+  }, [view, record?.name, category?.title]);
+
+  useLayoutEffect(() => {
+    const saved = direction === 'back' ? scrollPositions.current.get(hash) : null;
+    window.scrollTo(0, saved ?? 0);
+  }, [hash]);
+
+  const selectTab = tab => {
+    if (tab.hash === hash) {
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      return;
+    }
+    navigate(tab.hash, { animate: false });
   };
 
-  const browseIndex = () => indexDialog.current?.showModal();
-
+  // ---------- 存储 ----------
   const saveRecords = async next => {
     if (writing.current) throw new Error('正在保存，请稍候。');
     writing.current = true;
@@ -440,56 +196,94 @@ export default function App() {
         throw error;
       }
       setRecords(next);
-
       return true;
     } finally {
       writing.current = false;
     }
   };
 
-  const saveEditor = async changes => {
+  const show = (text, undo = null) => {
+    noticeKey.current += 1;
+    setNotice({ text, undo, key: noticeKey.current });
+  };
+  const unsaved = persisted => (persisted ? '' : '，但未保存到本机');
+
+  const saveEditor = async (changes, newCategoryId) => {
     const adding = editor.mode === 'add';
     const id = adding ? crypto.randomUUID() : editor.id;
+    // 清空的字段直接移除，保持与 normalizeRecords 一致的存储格式
+    const clean = record => Object.fromEntries(Object.entries(record).filter(([, value]) => value !== null && value !== undefined));
     const next = adding
-      ? [{ id, categoryId: editor.category.id, ...changes }, ...records]
-      : records.map(item => item.id === id ? { ...item, ...changes } : item);
+      ? [clean({ id, categoryId: newCategoryId, ...changes }), ...records]
+      : records.map(item => (item.id === id ? clean({ ...item, ...changes }) : item));
     const persisted = await saveRecords(next);
     const text = adding ? '藏品已添加' : editor.mode === 'opening' ? '开封记录已保存' : '藏品已更新';
-    setNotice({ text: persisted ? text : text + '，但未保存到本机' });
-    if (adding) openRecord(id);
+    show(text + unsaved(persisted));
+    if (adding) navigate(recordHash({ id, categoryId: newCategoryId }, 'library'));
     return true;
   };
 
-  const logUse = async id => {
-    const use = { id: crypto.randomUUID(), date: todayInShanghai() };
-    const next = records.map(item => item.id === id ? { ...item, uses: [...(item.uses ?? []), use] } : item);
+  const logUse = async (id, date = todayInShanghai()) => {
+    const use = { id: crypto.randomUUID(), date };
+    const next = records.map(item => (item.id === id ? { ...item, uses: [...(item.uses ?? []), use] } : item));
     try {
       const persisted = await saveRecords(next);
-      setNotice({ text: '已记下今天的一次使用' + (persisted ? '' : '，但未保存到本机'), undo: { type: 'use', id, useId: use.id } });
-    } catch (error) { setNotice({ text: error.message || '未能保存使用记录，请重试。' }); }
+      const label = date === todayInShanghai() ? '已记下今天的一次使用' : '已补记一次使用';
+      show(label + unsaved(persisted), { type: 'use', id, useId: use.id });
+    } catch (error) {
+      show(error.message || '未能保存使用记录，请重试。');
+    }
+  };
+
+  const removeUse = async (id, useId) => {
+    const target = records.find(item => item.id === id);
+    const use = target?.uses?.find(entry => entry.id === useId);
+    if (!use) return;
+    const next = records.map(item => (item.id === id ? { ...item, uses: item.uses.filter(entry => entry.id !== useId) } : item));
+    try {
+      const persisted = await saveRecords(next);
+      show('已删除一条使用记录' + unsaved(persisted), { type: 'restoreUse', id, use });
+    } catch (error) {
+      show(error.message || '未能删除，请重试。');
+    }
+  };
+
+  const deleteRecord = async id => {
+    const target = records.find(item => item.id === id);
+    if (!target) return;
+    try {
+      const persisted = await saveRecords(records.filter(item => item.id !== id));
+      show(`已删除「${target.name}」` + unsaved(persisted), { type: 'delete', record: target });
+      if (route.recordId === id) goBack();
+    } catch (error) {
+      show(error.message || '未能删除，请重试。');
+    }
   };
 
   const undoNotice = async () => {
     const undo = notice?.undo;
     if (!undo) return;
-    const next = undo.type === 'delete'
-      ? [undo.record, ...records.filter(item => item.id !== undo.record.id)]
-      : records.map(item => item.id === undo.id ? { ...item, uses: (item.uses ?? []).filter(use => use.id !== undo.useId) } : item);
-    const label = undo.type === 'delete' ? `已恢复「${undo.record.name}」` : '已撤销这次使用';
+    let next;
+    let label;
+    if (undo.type === 'delete') {
+      next = [undo.record, ...records.filter(item => item.id !== undo.record.id)];
+      label = `已恢复「${undo.record.name}」`;
+    } else if (undo.type === 'restoreUse') {
+      next = records.map(item => (item.id === undo.id ? { ...item, uses: [...(item.uses ?? []), undo.use] } : item));
+      label = '已恢复这条使用记录';
+    } else {
+      next = records.map(item => (item.id === undo.id ? { ...item, uses: (item.uses ?? []).filter(use => use.id !== undo.useId) } : item));
+      label = '已撤销这次使用';
+    }
     try {
       const persisted = await saveRecords(next);
-      setNotice({ text: persisted ? label : label + '，但未保存到本机' });
-    } catch (error) { setNotice({ text: error.message || '未能撤销，请重试。' }); }
+      show(label + unsaved(persisted));
+    } catch (error) {
+      show(error.message || '未能撤销，请重试。');
+    }
   };
 
-  const deleteRecord = async () => {
-    const target = records.find(item => item.id === editor.id);
-    if (!target) return;
-    const persisted = await saveRecords(records.filter(item => item.id !== target.id));
-    setNotice({ text: `已删除「${target.name}」` + (persisted ? '' : '，但未保存到本机'), undo: { type: 'delete', record: target } });
-    if (page === 'item') backTo('category');
-  };
-
+  // ---------- 备份 ----------
   const exportBackup = () => {
     const blob = new Blob([JSON.stringify({ version: 2, records }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -498,6 +292,7 @@ export default function App() {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    show('备份已导出');
   };
 
   const importBackup = async file => {
@@ -507,23 +302,22 @@ export default function App() {
       const list = Array.isArray(parsed) ? parsed : parsed?.records;
       const { records: incoming, skipped } = normalizeRecords(list);
       const fresh = incoming.filter(item => !records.some(old => old.id === item.id));
-      if (!fresh.length) { setNotice({ text: incoming.length ? '这些藏品都已存在' : '文件里没有可导入的藏品' }); return; }
+      if (!fresh.length) { show(incoming.length ? '这些藏品都已存在' : '文件里没有可导入的藏品'); return; }
       const persisted = await saveRecords(mergeCollections(records, fresh));
-      setNotice({ text: `已导入 ${fresh.length} 件藏品` + (skipped ? `，跳过 ${skipped} 条无效记录` : '') + (persisted ? '' : '，但未保存到本机') });
-      indexDialog.current?.close();
+      show(`已导入 ${fresh.length} 件藏品` + (skipped ? `，跳过 ${skipped} 条无效记录` : '') + unsaved(persisted));
     } catch {
-      setNotice({ text: '无法读取这个文件，请选择 Vanity 导出的 JSON' });
+      show('无法读取这个文件，请选择 Vanity 导出的 JSON');
     }
   };
 
   const importable = legacy.filter(old => !records.some(item => item.id === old.id));
   const importOldRecords = async () => {
-    if (!importable.length) { setNotice({ text: '未找到可导入的旧藏品' }); return; }
+    if (!importable.length) { show('未找到可导入的旧藏品'); return; }
     try {
       const persisted = await saveRecords(mergeCollections(records, importable));
-      setNotice({ text: persisted ? '旧藏品已导入' : '旧藏品已导入，但未保存到本机' });
+      show('旧藏品已导入' + unsaved(persisted));
     } catch (error) {
-      setNotice({ text: error.message || '未能导入旧藏品，请重试。' });
+      show(error.message || '未能导入旧藏品，请重试。');
     }
   };
 
@@ -535,103 +329,93 @@ export default function App() {
 
   useEffect(() => watchExternalChanges(() => setExternalChange(true)), []);
 
+  // ---------- 渲染 ----------
+  const badge = expiringSoon(records).length;
+  const openRecord = tab => id => {
+    const target = records.find(item => item.id === id);
+    if (target) navigate(recordHash(target, tab));
+  };
+
+  let page;
+  if (view === 'record') {
+    page = (
+      <RecordView key={record.id} record={record} backLabel={backLabel} onBack={goBack}
+        onUse={logUse} onRemoveUse={removeUse} onDelete={deleteRecord}
+        onEdit={() => setEditor({ mode: 'edit', id: record.id })}
+        onOpening={() => setEditor({ mode: 'opening', id: record.id })} />
+    );
+  } else if (view === 'category') {
+    page = (
+      <CategoryView key={category.id} category={category} backLabel={backLabel} onBack={goBack}
+        records={records.filter(item => item.categoryId === category.id)}
+        onRecord={openRecord('library')} onUse={id => logUse(id)}
+        onAdd={() => setEditor({ mode: 'add', categoryId: category.id })} />
+    );
+  } else if (view === 'expiring') {
+    page = <ExpiringView records={records} onRecord={openRecord('expiring')} />;
+  } else if (view === 'settings') {
+    page = <SettingsView records={records} theme={theme} onTheme={chooseTheme} onExport={exportBackup} onImport={importBackup} />;
+  } else {
+    page = (
+      <LibraryView records={records} onCategory={id => navigate('#' + id)} onRecord={openRecord('library')}
+        onAdd={categoryId => setEditor({ mode: 'add', categoryId })} />
+    );
+  }
+
   return (
-    <>
-      {page === 'item' ? (
-        <RecordPage key={record.id} category={category} record={record} onReturn={() => backTo('category')} onIndex={browseIndex} onUse={logUse} onEdit={id => setEditor({ mode: 'edit', id, category })} onOpening={id => setEditor({ mode: 'opening', id, category })} themeControl={themeControl} />
-      ) : page === 'category' ? (
-        <CategoryPage key={category.id} category={category} records={records.filter(item => item.categoryId === category.id)} onReturn={() => backTo('cover')} onIndex={browseIndex} onRecord={openRecord} onUse={logUse} onAdd={() => setEditor({ mode: 'add', category })} fromFrame={fromFrame.current} restoreId={lastRecord.current} themeControl={themeControl} />
-      ) : (
-        <main className="app">
-          <header className="brand">
-            <VanityMark />
-          </header>
-          <div className="cover-tools header-tools"><button className="quiet-button" onClick={browseIndex}>全部分类</button>{themeControl}</div>
-          <div className="app__stage">
-            <CircularCarousel
-              items={items}
-              controlsRef={carousel}
-              initialIndex={coverIndex.current}
-              showcase
-              intro={hasVisitedCategory.current || coverEntered.current ? 'none' : 'assemble'}
-              cardWidth={260}
-              gap={21}
-              scale={1.22}
-              autoplay="drift"
-              speed={12}
-              pauseOnHover
-              draggable
-              focusOnClick={false}
-              onChange={setActive}
-              onItemClick={(item, index) => openCategory(item, carousel.current?.currentFrame(index))}
-              parallax={0.12}
-              cornerRadius={14}
-              offsetY={0.02}
-              compactOffsetY={-0.035}
-              fadeColor="var(--carousel-shade)"
-            />
-          </div>
-          <div className="cover-caption">
-            <button type="button" className="cover-caption__step" aria-label="上一个分类" onClick={() => carousel.current?.stepBy(-1)}><Chevron left /></button>
-            <div className="cover-caption__label">
-              <p className="cover-caption__count">{String(active + 1).padStart(2, '0')} / {items.length}</p>
-              <h2>{current.title}</h2>
-              <RouteLink className="cover-caption__open" href={categoryHash(current)} ref={coverAction} onNavigate={() => openCategory(current, carousel.current?.currentFrame(active))}>
-                查看{current.title} <Chevron />
-              </RouteLink>
-            </div>
-            <button type="button" className="cover-caption__step" aria-label="下一个分类" onClick={() => carousel.current?.stepBy(1)}><Chevron /></button>
-          </div>
-        </main>
-      )}
-      <dialog className="category-index" ref={indexDialog} aria-labelledby="category-title" onClick={event => {
-        if (event.target === event.currentTarget) event.currentTarget.close();
-      }}>
-        <div className="category-index__body">
-          <header>
-            <h2 id="category-title">全部分类</h2>
-            <form method="dialog"><button type="submit" aria-label="关闭分类目录">×</button></form>
-          </header>
-          <ul>
-            {items.map(item => (
-              <li key={item.id}>
-                {item.id === category?.id && page === 'category' ? (
-                  <div aria-current="page"><span>{item.title}</span><span aria-label="当前分类">✓</span></div>
-                ) : (
-                  <RouteLink href={categoryHash(item)} onNavigate={() => openCategory(item)}>
-                    <span>{item.title}</span><Chevron />
-                  </RouteLink>
-                )}
+    <div className="app">
+      <nav className="tabbar material" aria-label="主导航">
+        <p className="tabbar__brand" aria-hidden="true">Vanity</p>
+        <ul className="tabbar__list">
+          {tabs.map(tab => {
+            const current = route.tab === tab.id;
+            return (
+              <li key={tab.id}>
+                <button type="button" className="tabbar__item" aria-current={current ? 'page' : undefined} onClick={() => selectTab(tab)}
+                  aria-label={tab.id === 'expiring' && badge ? `${tab.label}，${badge} 件需要留意` : tab.label}>
+                  <span className="tabbar__icon"><tab.Icon size={24} /></span>
+                  <span className="tabbar__label">{tab.label}</span>
+                  {tab.id === 'expiring' && badge > 0 && <span className="badge" aria-hidden="true">{badge > 99 ? '99+' : badge}</span>}
+                </button>
               </li>
-            ))}
-          </ul>
-          <footer className="category-index__backup">
-            <button type="button" onClick={exportBackup} disabled={!records.length}>导出备份</button>
-            <label>导入备份<input type="file" accept="application/json,.json" hidden onChange={event => { importBackup(event.target.files?.[0]); event.target.value = ''; }} /></label>
-          </footer>
-        </div>
-      </dialog>
-      {editor && <CollectionEditor category={editor.category} mode={editor.mode} record={records.find(item => item.id === editor.id)} onClose={() => setEditor(null)} onSave={saveEditor} onDelete={deleteRecord} />}
-      {storage === 'memory' ? (
-        <div className="system-region" role="alert"><span>当前浏览器禁止保存数据，关闭页面后藏品会丢失</span></div>
-      ) : externalChange ? (
-        <div className="system-region" role="status">
-          <span>数据已在其他页签更新，请刷新后重试</span>
-          <button type="button" onClick={() => window.location.reload()}>刷新</button>
-        </div>
-      ) : importable.length > 0 && !importDismissed ? (
-        <div className="system-region" role="status">
-          <span>此浏览器有 {importable.length} 件旧藏品</span>
-          <button type="button" onClick={importOldRecords}>导入此浏览器的藏品</button>
-          <button type="button" onClick={() => setImportDismissed(true)}>稍后</button>
-        </div>
-      ) : null}
-      <div className="notice-region">
-        <div role="status">{notice?.text}</div>
-        {notice?.undo && <><button type="button" onClick={undoNotice}>撤销</button><button type="button" aria-label="关闭提示" onClick={() => setNotice(null)}>×</button></>}
+            );
+          })}
+        </ul>
+      </nav>
+
+      <main className="main">
+        {storage === 'memory' ? (
+          <div className="banner" role="alert"><span>当前浏览器禁止保存数据，关闭页面后藏品会丢失。</span></div>
+        ) : externalChange ? (
+          <div className="banner" role="status">
+            <span>数据已在其他页签更新，请刷新后再继续。</span>
+            <button type="button" className="text-button text-button--bold" onClick={() => window.location.reload()}>刷新</button>
+          </div>
+        ) : importable.length > 0 && !importDismissed ? (
+          <div className="banner" role="status">
+            <span>此浏览器里还有 {importable.length} 件旧版藏品。</span>
+            <button type="button" className="text-button" onClick={() => setImportDismissed(true)}>稍后</button>
+            <button type="button" className="text-button text-button--bold" onClick={importOldRecords}>导入</button>
+          </div>
+        ) : null}
+        <div key={hash} className="transition" data-direction={direction ?? undefined}>{page}</div>
+      </main>
+
+      {editor && (
+        <EditorSheet mode={editor.mode} categoryId={editor.categoryId}
+          record={editor.id ? records.find(item => item.id === editor.id) : null}
+          onClose={() => setEditor(null)} onSave={saveEditor} />
+      )}
+
+      <div className="toast-region" aria-live="polite">
+        {notice && (
+          <div key={notice.key} className="toast material" role="status">
+            <IconCheck size={18} strokeWidth={2.4} className="toast__icon" />
+            <span className="toast__text">{notice.text}</span>
+            {notice.undo && <button type="button" className="toast__undo" onClick={undoNotice}>撤销</button>}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
-
-
