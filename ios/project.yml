@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
 targets:
@@ -27,8 +27,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.lifestyle
         ITSAppUsesNonExemptEncryption: false
-        UILaunchScreen:
-          UIColorName: Background
+        UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:

@@ -1,18 +1,15 @@
-import CoreText
 import SwiftUI
-import UIKit
 
+/// 设计基调：遵循 Human Interface Guidelines，使用系统字体、系统语义色和材质，
+/// 只保留一种品牌色（玫瑰木 AccentColor），让藏品照片成为界面上唯一的主角。
 enum Palette {
-    static let background = Color("Background")
-    static let ink = Color("Ink")
-    static let silver = Color("Silver")
-    static let rule = Color("Rule")
-    static let paper = Color("Paper")
-    static let veil = Color("Veil")
-    static let plum = Color("Plum")
-    static let plumText = Color("PlumText")
-    static let warning = Color("Warning")
-    static let expired = Color("Expired")
+    static let accent = Color.accentColor
+    static let warning = Color.orange
+    static let expired = Color.red
+    static let fresh = Color.green
+    static let groupedBackground = Color(uiColor: .systemGroupedBackground)
+    static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
+    static let fill = Color(uiColor: .tertiarySystemFill)
 }
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
@@ -20,9 +17,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .system: "跟随系统"
-        case .light: "白天"
-        case .dark: "夜间"
+        case .system: "自动"
+        case .light: "浅色"
+        case .dark: "深色"
         }
     }
     var colorScheme: ColorScheme? {
@@ -34,82 +31,29 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum Typeface {
-    /// 宋体优先，没有时退回系统衬线体
-    private static let songti: String? = ["STSongti-SC-Regular", "STSong"].first { UIFont(name: $0, size: 12) != nil }
-
-    static func serif(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        if let songti { return .custom(songti, size: size, relativeTo: style) }
-        return .system(size: size, design: .serif)
-    }
-
-    static func script(_ size: CGFloat) -> Font { .custom("GreatVibes-Regular", fixedSize: size) }
-
-    static func registerFonts() {
-        guard let url = Bundle.main.url(forResource: "GreatVibes-Regular", withExtension: "ttf") else { return }
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-    }
+extension Expiry.Tone {
+    var color: Color { self == .expired ? Palette.expired : Palette.warning }
+    var symbol: String { self == .expired ? "exclamationmark.circle.fill" : "clock.fill" }
 }
 
-struct VanityMark: View {
-    var size: CGFloat = 30
-    var body: some View {
-        Text("Vanity")
-            .font(Typeface.script(size))
-            .foregroundStyle(Palette.ink)
-            .accessibilityLabel("Vanity")
-    }
-}
-
-struct PrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(Palette.plumText)
-            .padding(.horizontal, 18)
-            .frame(minHeight: 44)
-            .background(Palette.plum, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .opacity(configuration.isPressed ? 0.82 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
-    }
-}
-
-struct QuietButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline)
-            .foregroundStyle(Palette.plum)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 36)
-            .background(Palette.veil, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.rule))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-    }
-}
-
-struct Card<Content: View>: View {
-    @ViewBuilder var content: Content
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) { content }
-            .background(Palette.paper, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.rule))
-    }
-}
-
-struct StatusBadge: View {
+/// 列表行尾的到期状态：图标 + 文字，颜色只用来强调，不单独承载信息。
+struct StatusLabel: View {
     let status: Expiry.Status?
     var body: some View {
         if let status {
-            let color = status.tone == .expired ? Palette.expired : Palette.warning
-            HStack(spacing: 5) {
-                Circle().fill(color).frame(width: 6, height: 6)
-                Text(status.label)
-            }
-            .font(.caption)
-            .foregroundStyle(color)
-            .accessibilityElement(children: .combine)
+            Label(status.label, systemImage: status.tone.symbol)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(status.tone.color)
+                .labelStyle(.titleAndIcon)
+                .imageScale(.small)
         }
+    }
+}
+
+/// 圆角缩略图，统一使用连续曲率圆角。
+extension View {
+    func continuousCorners(_ radius: CGFloat) -> some View {
+        clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 

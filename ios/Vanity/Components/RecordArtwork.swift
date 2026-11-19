@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// 藏品缩略图：用户照片 > 占位图
+/// 藏品缩略图：用户照片优先，没有照片时显示所属品类的 SF Symbol。
 struct RecordArtwork: View {
     let record: CollectionRecord
-    var cornerRadius: CGFloat = 8
-    var showsHint = false
+    var cornerRadius: CGFloat = 10
     @Environment(CollectionStore.self) private var store
 
     var body: some View {
@@ -15,19 +14,28 @@ struct RecordArtwork: View {
                     .scaledToFill()
                     .accessibilityLabel(record.imageAlt ?? record.name)
             } else {
-                LinearGradient(colors: [Palette.veil, Palette.rule.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                VStack(spacing: 8) {
-                    Image(systemName: showsHint ? "camera" : "photo")
-                        .font(showsHint ? .title2 : .footnote)
-                    if showsHint {
-                        Text("添加照片").font(.footnote)
-                    }
+                Rectangle().fill(Palette.fill)
+                GeometryReader { proxy in
+                    Image(systemName: record.categoryId.info.symbol)
+                        .font(.system(size: proxy.size.width * 0.36, weight: .light))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .foregroundStyle(Palette.silver)
-                .accessibilityHidden(!showsHint)
+                .accessibilityHidden(true)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .continuousCorners(cornerRadius)
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+/// 品类封面图（随 App 打包的产品照片）。
+struct CategoryArtwork: View {
+    let category: VanityCategory
+    var body: some View {
+        Image(category.imageName)
+            .resizable()
+            .scaledToFill()
+            .accessibilityLabel(category.alt)
     }
 }

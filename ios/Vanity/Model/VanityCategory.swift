@@ -27,6 +27,23 @@ struct VanityCategory: Identifiable, Hashable {
     /// 新建藏品时的开封后可用月数建议
     let suggestedPAO: Int
 
+    /// 没有照片时使用的 SF Symbol
+    var symbol: String {
+        switch id {
+        case .mask: "face.smiling"
+        case .cleanser: "bubbles.and.sparkles"
+        case .cream: "cylinder"
+        case .primer: "sun.max"
+        case .foundation: "drop"
+        case .loosePowder: "circle.dotted"
+        case .pressedPowder: "circle.inset.filled"
+        case .blush: "heart"
+        case .eyeshadow: "eye"
+        case .lipstick: "mouth"
+        case .puff: "cloud"
+        }
+    }
+
     var cover: String { coverName ?? imageName }
 
     static let all: [VanityCategory] = [

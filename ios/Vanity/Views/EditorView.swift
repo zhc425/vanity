@@ -38,14 +38,10 @@ struct EditorView: View {
     @State private var pickedPhoto: UIImage?
     @State private var error: String?
     @State private var loaded = false
+    @State private var categoryID: CategoryID = .lipstick
     @FocusState private var nameFocused: Bool
 
-    private var category: VanityCategory {
-        switch mode {
-        case .add(let id): id.info
-        case .edit(let record), .opening(let record): record.categoryId.info
-        }
-    }
+    private var category: VanityCategory { categoryID.info }
 
     private var title: String {
         switch mode {
@@ -82,29 +78,25 @@ struct EditorView: View {
                 }
                 if let error {
                     Section {
-                        Label(error, systemImage: "exclamationmark.circle")
+                        Label(error, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(Palette.expired)
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Palette.background)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isOpeningOnly ? "保存" : "保存藏品") { save() }
+                    Button(isAdding ? "添加" : "完成") { save() }
                         .fontWeight(.semibold)
-                }
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
-                        Text(category.title).font(.caption2).foregroundStyle(Palette.plum)
-                        Text(title).font(Typeface.serif(17))
-                    }
+                        .disabled(!isOpeningOnly && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear(perform: populate)
+            .onChange(of: isOpened) { _, opened in
+                if opened && paoMonths == nil { paoMonths = category.suggestedPAO }
+            }
             .onChange(of: photoItem) { _, item in loadPhoto(item) }
         }
         .presentationDragIndicator(.visible)
@@ -112,40 +104,56 @@ struct EditorView: View {
 
     // MARK: Sections
 
+    private var isAdding: Bool {
+        if case .add = mode { return true }
+        return false
+    }
+
     private var identitySection: some View {
-        Section {
-            HStack(spacing: 14) {
-                PhotosPicker(selection: $photoItem, matching: .images) {
-                    Group {
-                        if let pickedPhoto {
-                            Image(uiImage: pickedPhoto).resizable().scaledToFill()
-                        } else if let image = existingPhoto {
-                            Image(uiImage: image).resizable().scaledToFill()
-                        } else {
-                            ZStack {
-                                Palette.veil
-                                Image(systemName: "camera").foregroundStyle(Palette.silver)
+        Group {
+            Section {
+                VStack(spacing: 10) {
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        Group {
+                            if let pickedPhoto {
+                                Image(uiImage: pickedPhoto).resizable().scaledToFill()
+                            } else if let image = existingPhoto {
+                                Image(uiImage: image).resizable().scaledToFill()
+                            } else {
+                                ZStack {
+                                    Rectangle().fill(Palette.fill)
+                                    Image(systemName: category.symbol)
+                                        .font(.system(size: 34, weight: .light))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                        .frame(width: 112, height: 112)
+                        .continuousCorners(24)
                     }
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .buttonStyle(.plain)
+                    PhotosPicker(pickedPhoto == nil && existingPhoto == nil ? "添加照片" : "更换照片", selection: $photoItem, matching: .images)
+                        .font(.subheadline.weight(.medium))
                 }
-                .accessibilityLabel("选择藏品照片")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("藏品名称").font(.caption).foregroundStyle(Palette.silver)
-                    TextField("必填，例如：柔焦定妆散粉", text: $name)
-                        .font(Typeface.serif(19))
-                        .focused($nameFocused)
-                        .submitLabel(.next)
-                }
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
             }
-            TextField("品牌", text: $brand)
-            TextField("色号或规格", text: $shade)
-        } footer: {
-            Text("只有名称是必填的，其他信息可以之后再补。")
+
+            Section {
+                TextField("名称", text: $name)
+                    .focused($nameFocused)
+                    .submitLabel(.next)
+                TextField("品牌", text: $brand)
+                TextField("色号或规格", text: $shade)
+                if isAdding {
+                    Picker("分类", selection: $categoryID) {
+                        ForEach(VanityCategory.all) { Label($0.title, systemImage: $0.symbol).tag($0.id) }
+                    }
+                }
+            } footer: {
+                Text("只有名称必填，其他信息可以之后再补。")
+            }
         }
-        .listRowBackground(Palette.paper)
     }
 
     private var purchaseSection: some View {
@@ -157,7 +165,7 @@ struct EditorView: View {
             HStack {
                 Text("实付价格")
                 Spacer()
-                Text("¥").foregroundStyle(Palette.silver)
+                Text("¥").foregroundStyle(.secondary)
                 TextField("选填", text: $priceText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
@@ -168,7 +176,6 @@ struct EditorView: View {
                 DatePicker("包装到期日", selection: $packageExpiry, displayedComponents: .date)
             }
         }
-        .listRowBackground(Palette.paper)
     }
 
     @ViewBuilder
@@ -184,7 +191,7 @@ struct EditorView: View {
                         Text("开封后可用")
                         Spacer()
                         Text(paoMonths.map { "\($0) 个月" } ?? "未填写")
-                            .foregroundStyle(paoMonths == nil ? Palette.silver : Palette.ink)
+                            .foregroundStyle(paoMonths == nil ? .secondary : .primary)
                             .monospacedDigit()
                         Stepper("", value: Binding(get: { paoMonths ?? category.suggestedPAO },
                                                    set: { paoMonths = $0 }), in: 1...120)
@@ -194,11 +201,11 @@ struct EditorView: View {
                         HStack(spacing: 8) {
                             ForEach([3, 6, 12, 18, 24, 36], id: \.self) { months in
                                 Button("\(months)M") { paoMonths = months }
-                                    .font(.footnote.monospacedDigit())
+                                    .font(.footnote.weight(.medium).monospacedDigit())
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(paoMonths == months ? Palette.plum : Palette.veil, in: Capsule())
-                                    .foregroundStyle(paoMonths == months ? Palette.plumText : Palette.ink)
+                                    .background(paoMonths == months ? Palette.accent : Palette.fill, in: Capsule())
+                                    .foregroundStyle(paoMonths == months ? Color.white : Color.primary)
                             }
                         }
                     }
@@ -210,7 +217,6 @@ struct EditorView: View {
         } footer: {
             Text("包装上的开盖图标（如 12M）表示开封后可用的月数。到期日取包装有效期与开封后期限中较早的一个。")
         }
-        .listRowBackground(Palette.paper)
 
         if alwaysOn, let record = existingRecord, record.openedDate != nil {
             Section {
@@ -221,8 +227,7 @@ struct EditorView: View {
                     if store.update(next, message: "已清除开封记录") { dismiss() }
                 }
             }
-            .listRowBackground(Palette.paper)
-        }
+            }
     }
 
     private var noteSection: some View {
@@ -230,7 +235,6 @@ struct EditorView: View {
             TextField("肤感、搭配、回购意向……", text: $note, axis: .vertical)
                 .lineLimit(3...8)
         }
-        .listRowBackground(Palette.paper)
     }
 
     // MARK: Logic
@@ -239,9 +243,11 @@ struct EditorView: View {
         guard !loaded else { return }
         loaded = true
         switch mode {
-        case .add:
+        case .add(let id):
+            categoryID = id
             nameFocused = true
         case .edit(let record), .opening(let record):
+            categoryID = record.categoryId
             name = record.name
             brand = record.brand ?? ""
             shade = record.shade ?? ""
@@ -315,7 +321,7 @@ struct EditorView: View {
         }
 
         switch mode {
-        case .add(let categoryID):
+        case .add:
             var record = CollectionRecord(categoryId: categoryID, name: trimmedName)
             apply(&record)
             guard store.add(record) else { return }

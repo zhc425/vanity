@@ -107,6 +107,9 @@ final class CollectionStore {
 
     // MARK: 修改
 
+    /// 整体替换（用于演示数据）
+    func replaceAll(_ next: [CollectionRecord]) { _ = persist(next) }
+
     @discardableResult
     func add(_ record: CollectionRecord) -> Bool {
         guard persist([record] + records) else { return false }

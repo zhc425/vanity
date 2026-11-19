@@ -2,19 +2,14 @@ import SwiftUI
 
 @main
 struct VanityApp: App {
-    @State private var store = CollectionStore()
+    @State private var store = DemoData.isEnabled ? DemoData.makeStore() : CollectionStore()
     @AppStorage("vanity.appearance") private var appearance: AppearanceMode = .system
-
-    init() {
-        Typeface.registerFonts()
-    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
                 .preferredColorScheme(appearance.colorScheme)
-                .tint(Palette.plum)
         }
     }
 }
@@ -22,92 +17,112 @@ struct VanityApp: App {
 enum Route: Hashable {
     case category(CategoryID)
     case record(String)
+    case history(String)
+}
+
+enum AppTab: Hashable {
+    case library, expiring, settings
 }
 
 struct RootView: View {
     @Environment(CollectionStore.self) private var store
-    @State private var path: [Route] = []
-    @State private var showIndex = false
-    @State private var showSettings = false
-    @Namespace private var zoom
+    @State private var tab: AppTab = .library
 
     var body: some View {
-        NavigationStack(path: $path) {
-            CoverView(zoom: zoom, onOpen: { path.append(.category($0)) },
-                      onIndex: { showIndex = true }, onSettings: { showSettings = true },
-                      onRecord: { record in path = [.category(record.categoryId), .record(record.id)] })
-                .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .category(let id):
-                        CategoryView(category: id.info, zoom: zoom,
-                                     onRecord: { path.append(.record($0)) },
-                                     onIndex: { showIndex = true })
-                            .zoomDestination("category-\(id.rawValue)", in: zoom)
-                    case .record(let id):
-                        RecordView(recordID: id, onDeleted: { if path.last == .record(id) { path.removeLast() } })
-                            .zoomDestination("record-\(id)", in: zoom)
-                    }
-                }
-        }
-        .sheet(isPresented: $showIndex) {
-            CategoryIndexView(current: currentCategory) { category in
-                showIndex = false
-                path = [.category(category)]
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showSettings) {
+        TabView(selection: $tab) {
+            LibraryView()
+                .tabItem { Label("藏品", systemImage: "square.grid.2x2.fill") }
+                .tag(AppTab.library)
+
+            ExpiringView()
+                .tabItem { Label("到期", systemImage: "hourglass") }
+                .badge(store.expiringSoon.count)
+                .tag(AppTab.expiring)
+
             SettingsView()
+                .tabItem { Label("设置", systemImage: "gearshape.fill") }
+                .tag(AppTab.settings)
         }
-        .overlay(alignment: .bottom) { NoticeBanner() }
-        .alert("提示", isPresented: Binding(get: { store.saveError != nil }, set: { if !$0 { store.saveError = nil } })) {
+        .overlay(alignment: .bottom) {
+            NoticeToast()
+                .padding(.bottom, 60)
+        }
+        .onAppear {
+            switch DemoData.screen {
+            case "expiring": tab = .expiring
+            case "settings": tab = .settings
+            default: break
+            }
+        }
+        .alert("无法保存", isPresented: Binding(get: { store.saveError != nil }, set: { if !$0 { store.saveError = nil } })) {
             Button("好") { store.saveError = nil }
         } message: {
             Text(store.saveError ?? "")
         }
     }
+}
 
-    private var currentCategory: CategoryID? {
-        for route in path.reversed() {
-            if case .category(let id) = route { return id }
+/// 共用的导航目的地，让每个标签页的 NavigationStack 都能打开品类、藏品与使用记录。
+struct RouteDestinations: ViewModifier {
+    @Binding var path: [Route]
+    let zoom: Namespace.ID
+
+    func body(content: Content) -> some View {
+        content.navigationDestination(for: Route.self) { route in
+            switch route {
+            case .category(let id):
+                CategoryView(category: id.info, zoom: zoom) { path.append(.record($0)) }
+            case .record(let id):
+                RecordView(recordID: id, onDeleted: { pop(.record(id)) }, onHistory: { path.append(.history(id)) })
+                    .zoomDestination("record-\(id)", in: zoom)
+            case .history(let id):
+                UseHistoryView(recordID: id)
+            }
         }
-        return nil
+    }
+
+    private func pop(_ route: Route) {
+        if let index = path.lastIndex(of: route) { path.removeSubrange(index...) }
     }
 }
 
-struct NoticeBanner: View {
+extension View {
+    func routeDestinations(path: Binding<[Route]>, zoom: Namespace.ID) -> some View {
+        modifier(RouteDestinations(path: path, zoom: zoom))
+    }
+}
+
+/// 系统风格的轻提示：材质胶囊，悬浮在标签栏上方。
+struct NoticeToast: View {
     @Environment(CollectionStore.self) private var store
 
     var body: some View {
         if let notice = store.notice {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: notice.undo == nil ? "checkmark.circle.fill" : "arrow.uturn.backward.circle.fill")
+                    .foregroundStyle(Palette.accent)
+                    .imageScale(.large)
                 Text(notice.text)
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.plumText)
+                    .font(.subheadline.weight(.medium))
                     .lineLimit(2)
-                Spacer(minLength: 0)
                 if notice.undo != nil {
                     Button("撤销") { store.performUndo() }
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Palette.plumText)
+                        .padding(.leading, 4)
                 }
-                Button {
-                    store.dismissNotice()
-                } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.semibold))
-                }
-                .foregroundStyle(Palette.plumText.opacity(0.75))
-                .accessibilityLabel("关闭提示")
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 13)
-            .background(Palette.plum, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.leading, 14)
+            .padding(.trailing, notice.undo == nil ? 18 : 16)
+            .padding(.vertical, 12)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.separator.opacity(0.4), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+            .padding(.horizontal, 24)
+            .onTapGesture { store.dismissNotice() }
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .id(notice.id)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.updatesFrequently)
         }
     }
 }

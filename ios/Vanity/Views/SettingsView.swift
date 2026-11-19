@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(CollectionStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @AppStorage("vanity.appearance") private var appearance: AppearanceMode = .system
     @AppStorage(ExpiryReminders.enabledKey) private var remindersOn = false
     @State private var exportURL: URL?
@@ -26,17 +25,15 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                .listRowBackground(Palette.paper)
 
                 Section {
                     Toggle("到期提醒", isOn: Binding(get: { remindersOn }, set: setReminders))
                 } footer: {
                     Text(reminderDenied ? "通知权限已关闭，请在系统设置中允许 Vanity 发送通知。" : "到期前 7 天和到期当天上午 9 点提醒。")
                 }
-                .listRowBackground(Palette.paper)
 
                 Section {
-                    LabeledContent("藏品总数", value: "\(store.records.count) 件")
+                    LabeledContent("藏品", value: "\(store.records.count) 件")
                     LabeledContent("累计使用", value: "\(store.records.reduce(0) { $0 + $1.useCount }) 次")
                     let spent = store.records.compactMap(\.price?.minorUnits).reduce(0, +)
                     if spent > 0 {
@@ -45,7 +42,6 @@ struct SettingsView: View {
                 } header: {
                     Text("统计")
                 }
-                .listRowBackground(Palette.paper)
 
                 Section {
                     if let exportURL {
@@ -69,7 +65,6 @@ struct SettingsView: View {
                 } footer: {
                     Text("备份格式与网页版通用。导入时会合并，已存在的藏品不会被覆盖。照片只保存在本机，不包含在备份中。")
                 }
-                .listRowBackground(Palette.paper)
 
                 Section {
                     LabeledContent("版本", value: version)
@@ -79,15 +74,8 @@ struct SettingsView: View {
                 } footer: {
                     Text("所有数据仅保存在本机。")
                 }
-                .listRowBackground(Palette.paper)
             }
-            .scrollContentBackground(.hidden)
-            .background(Palette.background)
             .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
-            }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .plainText]) { result in
                 if case .success(let url) = result {
                     store.importBackup(from: url)
